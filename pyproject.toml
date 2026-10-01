@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "gradio>=6.29.0",
     "pydantic-ai",
     "pydantic-evals>=2.48.0",
     "python-dotenv",
