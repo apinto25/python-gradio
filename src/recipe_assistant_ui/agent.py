@@ -9,7 +9,7 @@ from .models import Recipe
 load_dotenv()
 
 agent = Agent(
-    'google:gemini-3.6-flash',
+    'anthropic:claude-haiku-4-5',
     instructions='Eres un asistente de cocina. Recomiendas recetas según los '
                  'ingredientes que el usuario tiene disponibles. Sé breve y práctico. '
                  'Si el usuario hace una pregunta que no es sobre recomendarle una receta, '
@@ -44,7 +44,11 @@ def add_diet_preference(ctx: RunContext[RecipeDeps]) -> str:
     return ""
 
 
-@agent.tool
-def get_available_ingredients(ctx: RunContext[RecipeDeps]) -> list[str]:
-    """Return available ingredients."""
-    return ctx.deps.available_ingredients
+@agent.instructions
+def add_available_ingredients(ctx: RunContext[RecipeDeps]) -> str:
+    if ctx.deps and ctx.deps.available_ingredients:
+        return (
+            f"Ingredientes disponibles del usuario: {', '.join(ctx.deps.available_ingredients)}. "
+            "Basa la receta en estos ingredientes."
+        )
+    return ""
