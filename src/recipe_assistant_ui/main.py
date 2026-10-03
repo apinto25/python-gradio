@@ -46,28 +46,34 @@ async def handle_chat_message(message:str, history: list, message_history: list,
         available_ingredients = [item.strip() for item in identified.split(",")]
     else:
         available_ingredients = ["arroz", "pollo", "cebolla", "tomate"]
+
+    if not message:
+        raise gr.Error("Escribe una pregunta antes de enviar")
     
     deps = RecipeDeps(
         available_ingredients=available_ingredients,
         diet=diet if diet != "Ninguna" else None,
     )
-    async with agent.run_stream(message, deps=deps, message_history=message_history) as result:
-        async for output in result.stream_output(debounce_by=0.01):
-            if isinstance(output, str):
-                yield output, message_history
+    try:
+        async with agent.run_stream(message, deps=deps, message_history=message_history) as result:
+            async for output in result.stream_output(debounce_by=0.01):
+                if isinstance(output, str):
+                    yield output, message_history
 
-        final_output = await result.get_output()
-        new_history = result.all_messages()
-        if isinstance(final_output, Recipe):
-            recipe = final_output
-            response = (
-                f"{recipe.name} ({recipe.prep_time_minutes} min)\n\n"
-                f"Ingredientes: {", ".join(recipe.ingredients)}"
-                f"Pasos: {"\n".join(recipe.steps)}"
-            )
-        else:
-            response = final_output
-        yield response, new_history
+            final_output = await result.get_output()
+            new_history = result.all_messages()
+            if isinstance(final_output, Recipe):
+                recipe = final_output
+                response = (
+                    f"{recipe.name} ({recipe.prep_time_minutes} min)\n\n"
+                    f"Ingredientes: {", ".join(recipe.ingredients)}"
+                    f"Pasos: {"\n".join(recipe.steps)}"
+                )
+            else:
+                response = final_output
+            yield response, new_history
+    except Exception:
+        raise gr.Error("No pudimos generar una respuesta, intenta de nuevo en unos segundos")
 
 
 def image_to_bytes(image: Image.Image) -> bytes:
@@ -94,6 +100,7 @@ def main() -> None:
 
     interface = gr.ChatInterface(
         fn=handle_chat_message,
+        title="Asistente de recetas",
         additional_inputs=[
             message_history_state,
             gr.Dropdown(label="Preferencia alimenticia",
@@ -141,4 +148,9 @@ def main() -> None:
     #         outputs=[recipe_name, ingredients, prep_time, steps]
     #     )
 
-    interface.launch()
+    interface.launch(
+        theme=gr.themes.Soft(
+            primary_hue="orange",
+            secondary_hue="amber"
+        )
+    )
