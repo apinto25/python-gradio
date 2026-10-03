@@ -1,6 +1,8 @@
 import gradio as gr
+import io
 
 from PIL import Image
+from pydantic_ai import BinaryContent
 
 from .agent import agent
 from .deps import RecipeDeps
@@ -19,11 +21,42 @@ def ask_recipe(question: str) -> tuple[str, str, int, str]:
     return result.output, "", 0, ""
 
 
-def describe_image(image: Image.Image) -> str:
+async def ask_recipe_stream(question: str, diet: str):
+    deps = RecipeDeps(
+        available_ingredients=["arroz", "pollo", "cebolla", "tomate"],
+        diet=diet if diet != "Ninguna" else None,
+    )
+    async with agent.run_stream(question, deps=deps) as result:
+        async for output in result.stream_output(debounce_by=0.01):
+            if isinstance(output, str):
+                yield output, "", 0, ""
+
+        recipe = await result.get_output()
+        if isinstance(recipe, Recipe):
+            yield (
+                recipe.name,
+                ", ".join(recipe.ingredients),
+                recipe.prep_time_minutes,
+                "\n".join(recipe.steps)
+            )
+
+
+def image_to_bytes(image: Image.Image) -> bytes:
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def indentify_ingredients(image: Image.Image) -> str:
     if image is None:
         return "Sube una foto de tus ingredientes"
 
-    return f"Imagen recibida: {image.size[0]}x{image.size[1]} pixeles, formato: {image.format or "desconocido"}."
+    result = agent.run_sync([
+        "Qué ingredientes puedes identificar en esta imagen?",
+        BinaryContent(data=image_to_bytes(image), media_type="image/png")
+    ])
+
+    return result.output
 
 
 def main() -> None:
@@ -36,6 +69,8 @@ def main() -> None:
 
         with gr.Row():
             question = gr.Textbox(label="Pregunta")
+            diet = gr.Dropdown(label="Preferencia alimenticia",
+                               choices=["Ninguna", "Vegetariana", "Vegana"])
             ask_button = gr.Button("Preguntar")
 
         with gr.Row():
@@ -47,21 +82,21 @@ def main() -> None:
                 steps = gr.Textbox(label="Pasos")
 
         ingredients_image.upload(
-            fn=describe_image,
+            fn=indentify_ingredients,
             inputs=ingredients_image,
             outputs=image_info,
         )
 
         question.submit(
-            fn=ask_recipe,
-            inputs=question,
-            outputs=[ recipe_name, prep_time, ingredients, steps]
+            fn=ask_recipe_stream,
+            inputs=[question, diet],
+            outputs=[recipe_name, ingredients, prep_time, steps]
         )
 
         ask_button.click(
-            fn=ask_recipe,
-            inputs=question,
-            outputs=[ recipe_name, prep_time, ingredients, steps]
+            fn=ask_recipe_stream,
+            inputs=[question, diet],
+            outputs=[recipe_name, ingredients, prep_time, steps]
         )
 
     interface.launch()

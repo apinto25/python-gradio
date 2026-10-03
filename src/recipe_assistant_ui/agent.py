@@ -37,6 +37,13 @@ def add_season() -> str:
     )
 
 
+@agent.instructions
+def add_diet_preference(ctx: RunContext[RecipeDeps]) -> str:
+    if ctx.deps and ctx.deps.diet:
+        return f"El usuario tiene esta preferencia allimenticia: {ctx.deps.diet}. Ajusta la receta para que la cumpla"
+    return ""
+
+
 @agent.tool
 def get_available_ingredients(ctx: RunContext[RecipeDeps]) -> list[str]:
     """Return available ingredients."""
